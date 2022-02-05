@@ -1,0 +1,344 @@
+anotaciones sobre singer review
+there are several ways to ingest data, but it is convenient if within an organizational unit, the process is standardized.
+
+Singer's core concepts
+
+Aim: "The open-source standard for writing scripts that move data"
+
+Singer is a specification, describes how data extraction scripts and data loading scrippts should communicate using a standar JSON-based data formar over "stdout"
+* data exchange format: JSON
+
+stdout is a standardized "location" to which programs writ their output.
+
+
+Because Singer is a specification, these extraction scripts, which are called "taps" and the loading scripts, which are called "targets", can be written in any programming language
+
+
+* Extract and load with taps and targets
+* language independent
+
+And they can easily be mixed and matched to create small data pipelines that move data from one place to another, estos objetos con los "grifos" del datalake
+
+
+taps and targets communicate using 3 kinds of messages, SCHEMA
+
+STATE, RECORD, which are sento and read from specific streams
+* communicate over streams:
+* schema(metadata)
+* state(process metadata)
+* record(data)
+
+Stream, is a *named* virtual location to which you send messages, that can be picked up a downstream location(posterior)
+
+
+
+
+
+podemos hacer diferentes streams to partition data base on the topic for example: error messages would go to an error stream and data from different database tables could go to different streams as well
+
+imagine you would need to pass this set of data to a process.
+
+columns =("id", "name", "age", "has_children")
+
+users = {(1, "Adrian", "32", False),
+		 (2, "Ruanne", 28, False),
+		 (3, "Hillary", 29, True)}
+
+
+
+
+with the singer spec, you would first describe the data, by specifying its schema
+
+The schema should be gives as a valid "JSON schema"
+
+which is another specification that allows me to annotate and even validate structured data
+
+in this we specify the data type of each property or field
+and we could also impose constraints 
+
+json_schema = {
+	"properties": {"age":{"maximum": 130,
+	  					  "minimum": 1,
+	                      "type": "integer"},
+	               "has_children":{"type":"boolean"},
+	               "id": {"type":"integer"},
+	               "name": {"type": "string"}},
+	"$id": "http://yourdomain.com/schemas/my_user_schema.json",
+	"$schema": "http://json-schema.org/draft-07/schema#"
+
+
+
+
+
+	      }
+}
+
+las dos ultimas lineas se usan para permitir especificar unicamente este esquema dentro de tu organizacion y decirle a otros la version del json schema que esta siendo usada 
+
+
+you can tell the singer library to make a schema message out of this json schema( a partir de un json schema)
+
+import singer
+singer.write_schema(schema=json_schema, stream_name='DC_employees',
+key_properties=["id"])
+
+key_properties is a list of strings that make up the primary key for records from this stream.
+
+esto convierte al json schema en un json message
+
+
+serializing JSON
+
+to get objects in your code serialized as json, you would call
+
+json.dumps(json_schema["properties"]["age"])
+
+
+esto solo me imprime el objeto como una cadena
+
+
+with open("foo.json", mode="w") as fh:
+	json.dump(obj=json_schema, fp=fh) # writes the json-serialized object 
+		   #to the open file handle 
+
+
+
+
+foo = file output
+
+
+columns = ("id", "name", "has_children")
+
+users = {(1, "Adrian", 32, False),
+		(2, "Ruanne", 28, False),
+		(3, "hillary", 29, True)}
+
+
+
+para escribir informacion usamos
+
+singer.write_record(stream_name="DC_employees",
+record=dict(zip(columns, user.pop())))
+
+
+# el nombre del stream debe ser el mismo usado en el schema message, si no es ignorado
+
+lo de arriba es equivalente a esto
+
+fixed_dict = {"type": "RECORD", "stream": "DC_employee"}
+Running an ingestion pipeline with Singer
+
+Streaming record messages
+
+columns = ("id", "name", "has_children")
+
+users = {(1, "Adrian", 32, False),
+		(2, "Ruanne", 28, False),
+		(3, "hillary", 29, True)}
+
+
+fixed_dict = {"type":"RECORD","stream":"DC_employees"}
+
+record_msg = {**fixed_dict, "record": dict(zip(columns, users.pop()))}
+
+
+**fixed_dict----> esto bota lo que esta dentro de un diccionario en este caso todas las claves y valores
+
+
+
+print(json.dumps(record_msg))
+
+
+pero es mejor usar singer porque tiene algunas transformaciones adicionales para crear un mejor json
+
+
+When you would combine the "write schema" and "write record"
+
+you would have a Python module that prints JSON objects to stdout
+ si tu tambien tienes a singer target that can parse these messages, then you hava a full ingestion pipeline
+
+ Ingestion pipeline: Pipe the tap's output into a Singer target, using | symbol
+
+
+# Module: my_tap.py
+
+import singer
+
+singer.write_schema(stream_name="foo", schema=....)
+
+singer_write_records(stream_name="foo", records=...)
+
+si usas records en lugar de record, puedes tratar con diferentes records en lugar de uno
+
+target-csv module, esta en los paquetes de pyton
+
+su mision es crear csv files from json lines
+
+the CSV file will be made in the same directory where you run this command, unless you configure it otherwise by providing a configuration file.
+
+
+python my_tap.py | target-csv
+
+python my_tap.py | target-csv --config userconfig.cfg # para especificar opciones como el lugar donde se va a escribir el csv
+
+
+tambien si los tap y target esta n propiamente empaquetados podemos llamarlos directamente sin usar el python 
+
+my-packaged-tap | target-csv --config userconfig.cfg
+
+
+
+al hacer todos estos pasos obtenemos modularity 
+
+es decir cada tap o  target se desi;a para hacer algo muy muy bien 
+ y ellos son facilmente configurados en el config files
+
+
+ al trabajar con esta standardized intermediate format, you could easily swap out the "target-csv" for target-google-sheets or target-postgresql --config conf.json
+
+ por ejemplo, nosotros podemos escribrir the output to whole different systems, sinn tener que escribir mucho codigo, lo unico que hago es seleccionar mi tap y mi target que se correspondan con tu fuente y destinacion y voala 
+
+ tap-custom-google-scraper | target-postgresql --config headlines.json
+
+
+
+ahora hablaremos de  STATE message, estos nos permiten seguir la pista  es decir conocer el estado para un momento dado(es memoria)
+
+image por ejemplo que quieres extraer solo nuevos record desde una base de datos diariamente al medio dia
+
+
+singer.write_state(value={"max-last-updated-on": some_variable})
+
+en este caso esta variable puede representar algun record especifico, estos mensajes son de consulta 
+tap-mydelta --state last_state.json --config db_config.json
+
+
+
+
+
+
+
+template de recuperacion de datos apy 
+
+endpoint = "http://localhost:5000"
+
+# Fill in the correct API key
+api_key = "scientist007"
+
+# Create the web API’s URL
+authenticated_endpoint = "{}/{}".format(endpoint, api_key)
+
+# Get the web API’s reply to the endpoint
+api_response = requests.get(authenticated_endpoint).json()
+pprint.pprint(api_response)
+
+# Create the API’s endpoint for the shops
+shops_endpoint = "{}/{}/{}/{}".format(endpoint, api_key, "diaper/api/v1.0", "shops")
+shops = requests.get(shops_endpoint).json()
+print(shops)
+
+# Create the API’s endpoint for items of the shop starting with a "D"
+items_of_specific_shop_URL = "{}/{}/{}/{}/{}".format(endpoint, api_key, "diaper/api/v1.0", "items", "DM")
+products_of_shop = requests.get(items_of_specific_shop_URL).json()
+pprint.pprint(products_of_shop)
+
+
+
+para escribir un nuevo record
+
+# Use the convenience function to query the API
+tesco_items = retrieve_products("Tesco")
+
+singer.write_schema(stream_name="products", schema=schema,
+                    key_properties=[])
+
+# Write a single record to the stream, that adheres to the schema
+singer.write_record(stream_name="products", 
+            record={**tesco_items[0], 'store_name': "Tesco"})
+
+
+
+
+# Use the convenience function to query the API
+# Use the convenience function to query the API
+tesco_items = retrieve_products("Tesco")
+
+singer.write_schema(stream_name="products", schema=schema,
+                    key_properties=[])
+
+# Write a single record to the stream, that adheres to the schema
+singer.write_record(stream_name="products", 
+                    record={**tesco_items[0], "store_name": "Tesco"})
+print(requests.get(SHOPS_URL).json()["shops"])
+for shop in requests.get(SHOPS_URL).json()["shops"]:
+    # Write all of the records that you retrieve from the API
+    singer.write_records(
+      stream_name="products", # Use the same stream name that you used in the schema
+      records=({**item, "store_name": shop}
+               for item in retrieve_products(shop))
+    )
+
+
+import requests
+import singer
+
+api_netloc = "localhost:5000"
+api_key = "scientist007"
+shops_template = f"http://{api_netloc}/{api_key}/diaper/api/v1.0/shops"
+items_template = f"http://{api_netloc}/{api_key}/diaper/api/v1.0/items/"
+
+# Complete the JSON schema
+schema = {'properties': {
+    'brand': {'type': 'string'},
+    'model': {'type': 'string'},
+    'price': {'type': 'number'},
+    'currency': {'type': 'string'},
+    'quantity': {'type': 'integer', 'minimum': 1},
+    'date': {'type': 'string', "format": "date"},
+    'countrycode': {'type': 'string', 'pattern': "^[A-Z]{2}$"},
+    'store_name': {'type': 'string'}},
+    '$schema': 'http://json-schema.org/draft-07/schema#'
+}
+
+# Write the schema to stdout.
+singer.write_schema(stream_name='products', schema=schema, key_properties=[])
+
+
+# Return the set of items scraped from a specific store as a list
+def retrieve_store_items(store_name, items_endpoint=items_template):
+    return requests.get(f"{items_endpoint}{store_name}").json()["items"]
+
+
+def main():
+    for shop in requests.get(shops_template).json()["shops"]:
+        singer.write_records(stream_name='products',
+                             # Add the name of the store to every record.
+                             records=({'store_name': shop, **item}
+                                      for item in retrieve_store_items(shop)))
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+c# You need to run the following command in the 
+# terminal from the ~/workspace directory.
+# We'll bring you there first. 
+# The command here is still prefixed with a '#'.
+# Run everything after the '#' sign.
+
+# tap-marketing-api | target-csv --config ingest/data_lake.conf
+
+desde la carpeta raiz que incluye tanto tanto la entrada como la salida
+
+
+ejemplo de configuracion:
+
+{
+  "delimiter": ",",
+  "quotechar": "'",
+  "destination_path": "/home/repl/workspace/mnt/data_lake/landing/marketing_api/diapers/",
+  "disable_collection": "true"
+}

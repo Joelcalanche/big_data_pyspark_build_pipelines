@@ -1,0 +1,477 @@
+airflow anotaciones, joel presta atencion 
+
+What is a workflow?
+
+A workflow is a Sequence of tasks that are either scheduled to run or that could be triggered by the occurrence of an event.
+
+
+* Scheduled at a time or triggered by and event
+
+
+worflows are typically used by data scientist and data engineers to orchestrate data processing pipelines
+
+oftentimes we hava tasks that need to run on a schedule
+
+uno de los softwares usados es cron
+
+cron reads configurations files, known as "crontab" files, donde puedes especificar you tabulated task that you want to run at a specific time.
+
+* ejemplo
+minutos, horas, el * significa todo minuto------todo dia --todo mes
+*/15 9-17 * * 1-3, 5 log_my_activity
+esto se lee de derecha a izquierda como:
+
+todos los  15 minutos entre las 9 y las 5(horas normal de oficina) todos dias, todos los meses para cada vez 
+
+pero solo de los lunes a los miercoles y el vierns
+
+la ultima parte es la que filtrar
+
+los campos de esta notacion estan definidos por espacios en blanco
+
+0 7 * * 1
+# Minutes hours Days months days of the week command
+*/15      9-17  *      *    1-3,5            log_my_activity
+
+
+
+
+
+Hablemos de airflow
+
+what we expect from modern workflow managements tools is that they allow us to create and visualize complex workflows.
+
+1. Create and visualize complex workflows.
+
+2. Monitor and log workflows.
+
+Airflow can show us when certain task failed or how long each task took and plot that in clear charts.
+
+3. Scales horizontally
+as we get more tasks to execute, we want our tool to work with multiple machines, rather than increasing the performance of one single machine
+
+vertical scale, indica invertir en una mejor maquina
+horizontal scale, se trata de usar mas maquinas peque;as para hacer el mismo trabajo
+
+airflow cumple con todas estas cosas y es por eso que ha reemplazado a cron
+
+the central piece in an Airflow workflow is the DAG, which is an acronym for Directed Acyclic Graph.
+
+A graph is a collection of nodes that are connected by edges. the "directed" part in the acronym implies that there is a sense of direction between the nodes. the arrows on the  edges indicate the direction the "acyclic" part simply means that when you traverse directed graph, there is no way for you to circle back to the same node.
+
+en Airflow, the node are "operators", each instance of which can be given a unique label, the task id, Operators do something, like run a Python script, or schedule task with a cloud provider, they're triggered by a scheduler. But executed by an executor, which is typically a different process.
+
+
+tipica estructura de un dag
+
+from airflow import DAG
+
+my_dag = DAG(
+	dag_id="publish_logs",
+	schedule_interval="*****",
+	start_date=datetime(2010, 1, 1))
+
+
+Operators are assigned to this dag later in the codes
+
+Classes of operators
+
+The airflow task:
+
+tasks are essentially instances of operator classes
+
+
+* An instance of an Operator class
+
+	* intherit from baseOperator- > Must implement execute() method.
+
+
+
+Airflow comes with many, but you can also define your ouwn operators.
+
+They're typically named after what they do: a "BashOperator" runs
+
+
+* Performs a specific action(delegation):
+	* BashOperator -> run bash command/script
+	* PythonOperator -> run Python script
+
+	* SparkSubmitOperator-> submit a Spark job with a cluster
+
+
+	* Dependencies between operators are code with the "set_upstream()" and "set_downstream()"
+	# esto es lo que significa es definir la dependencia de una tarea para ejecutar otra
+
+	por ejemplo
+
+	dag = Dag(...)
+
+	task1 = BashOperator(...)
+	task2 = PythonOperator(...)
+
+	task3 = PythonOperator(...)
+
+	task1.set_downstream(task2)
+	"basicamene la tarea uno se cumple antes que la 2"
+	task3.set_upstream(task2)
+	"basicamente dice que la tarea 3 viene despues de la 2"
+
+	siempre observa la tarea de la isquierda
+	downstream---> es el puntero de salida se usa para decir "tarea de la derecha viene despues de"
+	upstream---> es el puntero anterior  task1---->task2------>task3
+
+
+
+
+# equivalent, but shorter:
+
+# task1 >> task2 
+
+# task3 << task2
+
+# Even clearer:
+
+# task1 >> task2 >> task 3
+
+
+A simple DAG description likes this would result in a liner flow as shown in this image.
+
+Note that the arguments of the operators allow you to specify  non-default conditions like"run if any of the task directly upstream fails" si alguna de las tareas anteriores falla   corre esta tarea
+
+upstream--- rio arriba viene primero
+
+downstream - rio abajo viene despues
+
+puedo usar la notacion cron en el scheduler
+
+0 7 * *
+
+
+
+
+
+
+# Para chequear cron expresion revisa este link
+
+https://www.freeformatter.com/cron-expression-generator-quartz.html
+
+
+
+Airflow's Bash Operator
+
+We use Airflow's BashOperator to execute any bash command that we could also run in a bash shell
+
+both
+
+"spark_submit" and our Singer ingestion pipeline are commands we could trigger this way
+
+One advantage of running these commands through Airflow is that the runs are logged, monitored and possibly retried
+
+Any Airflow operator take a "task_id", wich is a unique identifier that can be chosen by the user
+
+* Airflow adds loggins, retry options and metrics over running this yourself.s
+
+from airflow.operators.bash_operator import BashOperator
+todos los operator inherit from their ancestor the BaseOperator class
+
+bash_task = BashOperator(
+		task_id ='greet_world',
+		dag =dag,
+		bash_command ='echo "hello, world !"'
+)
+
+
+Airflow's Python Operator
+
+* Executes Python callables
+
+example
+from airflow.operators.python_operator import PythonOperator
+from my_library import my_magic_function
+
+python_task = PythonOperator(
+
+	dag = dag,
+	task_id = 'perform_magic',
+	python_callable = my_magic_funtion,
+	op_kwargs={"snowflake": "*", "amount":42}
+
+)
+
+the PythonOperator's "python_callable" argument accepts
+anything that can be "called", like functions, but also classes
+
+Pay especial attention that you don't actually call your callabl here yer: you  should pass a reference
+
+The operator will then call it for you, when the task gets triggered.
+
+if this callable needs extra arguments, you can pass them with the optional keyword arguments "op_args" aand "op_kwargs"
+
+
+Running PySpark from Airflow
+
+We would like to invoke those pipelines using Airflow
+
+There are a few ways to do this
+
+1) using BashOperator:
+
+spark_master = (
+	"spark://"
+	"spark_standalone_cluster_ip"
+	":7077"
+
+)
+
+command = ( "spark-submit"
+			"--master {master}
+			 --py-files package1.zip"
+			 "/path/to/app.py"
+		).format(master=spark_master)
+BashOperator(bash_command=command,...)
+
+A donwside of this approach is that you must hav the Spark binaries installed on the Airflow server
+
+Another way to do it would be to delegate to a different server, using Airflow's SSHOperator
+
+
+THis operator belong to th contrib package, which contains all 3erd party contributed operators
+
+* SHHOperator
+
+from airflow.contrib.operators\
+	.ssh_operator import SSHOperator
+
+task = SSHOperator(
+	task_id = 'ssh_spark_submit',
+	dag = dag,
+	command=command,
+)
+
+
+Compared to the BashOperator, this operator shifts the responsibility of having the Spark binaries installed to a different machine.
+
+If you have remote acces to a Spark-enabled cluster, This is a very clean way to go forward.
+you'd add the command to run in the form of a string
+
+
+Notices this operator's "ssh_conn_id= 'spark_master_ssh"
+it refers to a connection that you can configure in the Airflow user interface, under "Admin" menus's "Connections"
+
+from airflow.contrib.operators\
+	.ssh_operator import SSHOperator
+
+task = SSHOperator(
+	task_id = 'ssh_spark_submit',
+	dag = dag,
+	command=command,
+	ssh_conn_id='spark_master_ssh'
+)
+
+this conection provide a convenient way to remove hardcoded and duplicated pieces of information that is related to connection details for other server
+
+Another way to execute a Spark job, is to use the "SparkSubmitOperator"
+
+this too belongs to the contributd operators.
+
+it is a wrapper over using"spark-submit" directly on the Airflow server, and thus does not differ much from the solution that uses the BashOperator, but ir provides keyword arguments for spark-submit's arguments, so that you don't have to write out the entire command as a string
+
+it also uses a connection, in the same way that SSHOperator does
+
+from airflow.contrib.operators\
+.spark_submit_operator \
+import SparkSubmitOperator
+
+spark_task = SparksumitOperator(
+	task_id = 'spark_submit_id',
+	dag=dag,
+	application="/path/to/app.py",
+	py_files = "package1.zip",
+	conn_id = 'spark_default'
+)
+
+
+this makes re-use among different task, in perhaps different dag easy, provided they all connect to the same Spark-enabled cluster
+
+
+
+config = os.path.join(os.environ["AIRFLOW_HOME"], 
+                      "scripts",
+                      "configs", 
+                      "data_lake.conf")
+
+ingest = BashOperator(
+  # Assign a descriptive id
+  task_id="ingest_data", 
+  # Complete the ingestion pipeline
+  bash_command="tap-marketing-api | target-csv --config %s" % config,
+  dag=dag)
+
+
+
+  config = os.path.join(os.environ["AIRFLOW_HOME"], 
+                      "scripts",
+                      "configs", 
+                      "data_lake.conf",)
+print(config)
+ingest = BashOperator(
+  # Assign a descriptive id
+  task_id="ingest_data", 
+  # Complete the ingestion pipeline
+  bash_command="tap-marketing-api | target-csv --config %s" % config,
+  dag=dag)
+
+
+
+
+
+# Import the operator
+from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
+
+# Set the path for our files.
+entry_point = os.path.join(os.environ["AIRFLOW_HOME"], "scripts", "clean_ratings.py")
+dependency_path = os.path.join(os.environ["AIRFLOW_HOME"], "dependencies", "pydiaper.zip")
+
+with DAG('data_pipeline', start_date=datetime(2019, 6, 25),
+         schedule_interval='@daily') as dag:
+  	# Define task clean, running a cleaning job.
+    clean_data = SparkSubmitOperator(
+        application=entry_point, 
+        py_files=dependency_path,
+        task_id='clean_data',
+        conn_id='spark_default')
+
+
+
+Now it’s time for the frosting on the cake: bring the operators from the previous exercises together and schedule them in the right order!
+
+The operators you could need (SparkSubmitOperator, PythonOperator and BashOperator) have been imported already.
+
+
+
+
+
+
+
+corriendo multiples tareas
+
+
+
+spark_args = {"py_files": dependency_path,
+              "conn_id": "spark_default"}
+# Define ingest, clean and transform job.
+with dag:
+    ingest = BashOperator(task_id='Ingest_data', bash_command='tap-marketing-api | target-csv --config %s' % config)
+    clean = SparkSubmitOperator(application=clean_path, task_id='clean_data', **spark_args)
+    insight = SparkSubmitOperator(application=transform_path, task_id='show_report', **spark_args)
+    
+    # set triggering sequence
+    ingest >> clean >> insight
+
+
+
+
+
+
+
+
+
+
+ Deployment airflow
+
+ How do we deploy Airflow itself?, test our Dags and deploy
+
+
+ Installing and configuring Airflow
+
+
+ Even though the workflow is now fully described in Airflow DAGs, we haven't made a server ready for running this
+
+ The easiest way to get started is to install it on a linux image.
+
+ We'll assume we have a local server running linux available to us, it's not runnung anything else, and its Python enviroment is supposedly clean.
+
+ pasos
+
+ in the shell, we declare some directory to be home directory for Airflow
+
+ export AIRFLOW_HOME=~/airflow
+
+ then
+
+ pip install apache-airflow
+
+ then we initialize the metadata database
+
+ airflow initdb
+
+
+ On a clean installation like this one, this would create the AIRFLOW_HOME directory, and  populate it with a subdirectory for all the log files
+
+ two configurations files and  a SQlite database, in production, you'll likely use more advanced databases like MySQL or Postgres, but for sanity check you can go the default SQLite
+ This works, provided you've also configured Airflow to use the "SequentialExecutor",
+
+ In the config file for unittest this is preset 
+
+
+ In the other configuration file, which you'll be using in production you'll find a similar setting, also under the "core" section as shown here, Now this is a bare-bones Airflow instalation
+
+ In a production environment, your Airflow installation will look a bit more, tendra algunos archivos adicionales, in particular, dags is a place to store the dags(configurable)
+
+ test: unit test the possible deployment
+
+ possibly ensure consistency across DAGs
+
+ pluggins: store customs operators and hooks
+
+ connections, pool, variables: provide a location for vvarios configuration files you can import into Airflow
+
+
+ Example Airflow deployment test
+
+ from airflow.models import DagBag
+
+ def test_dagbag_import():
+ """Verify that Airflow will be able to import all DAGs in the repository"""
+
+ dagbag = DagBag()
+ number_of_failures  = len(dagbag.import_errors)
+
+ assert number_of_failures == 0, \
+ "There should be no Dag failures. got %s" % dagbag.import_errors
+
+
+if our testing framework would fail on this test, our CI/CD pipeline could prevent automatic deployment
+
+Now how do you get your DAGs uploaded to the server?
+
+if you keep al the dags in the repository that contains the basic installation this can be done simply by clonning the repository on the Airflow server.
+
+
+Alternatively, if you keep a Dag file and any dependencies close to the processing cod in  and other repository you simply copy the DAG file over the server with tool like"rsync" for exampl
+
+Or you make use of packaged DAG, which are zipped archivs that promote bettr isolation betwwen projects yo will still need to copy over the zip file to the server though.
+
+you could also have the airflow server regularly syncing the dag folder with a repository of DAGs, where everyone writes to
+
+
+Apache Airflow’s “SequentialExecutor” is low maintenance, but its biggest drawback is a lack of parallelization (hence the name). All other executors provide some way to parallelize tasks if their dependencies are met.
+
+In a production environment, you’re not likely to encounter the “SequentialExecutor”. Which executor is configured in the /home/repl/workspace/airflow/airflow.cfg configuration file?
+
+
+
+What your learned
+
+* Define purpose of components of data platforms
+
+First, you learned how to create an ingestion pipelin using Singer.
+
+Write  an ingestion pipelien using Singer
+
+Then you created a data pipeline which loaded, cleaned and transformed  your data into insights in Spark after which you also deployed this pipelines
+
+Next, you learned the importances of testing and how to automate some test using CircleCI
+
+* Create and deploy pipelines for big data in Spark
+*Manage and deploy a full data pipeline with Airflow

@@ -1,0 +1,39 @@
+* Ingest data using Singer
+* apply common data cleaning operations
+* gain insights by combining data with PySpark
+
+* test your code automatically
+
+* deploy Spark transformation pipelines
+
+
+singer library
+
+tap is scripts to extracts Data
+
+target is to Loads Data
+
+tap communicate with target using 3 kinds of messages
+
+SCHEMA, STATE, RECORD
+
+this are sent and read from specific streams:
+
+* Schema(metadata)
+* state(process metadata)
+
+* record(data)
+
+
+Stream is a *named* virtual location to which you send messages, that can be picked up ad a downstream location
+ es como el canal de comunicacion 
+
+
+
+
+and then proceed to expression of interest in the sef
+
+
+
+
+hello, good afternoon Miss Maryam, I hope you are very well, I am super happy, I have finished my speech recognition course and I want to share my achievement with you, with the things learned in this course I managed to do the application the other day, and now I have learned new things related to audio management, I leave you the link to my accreditation and below a summary of what I saw in the course, if I had to describe my skills in python I would say that today I am at the right level to learn anything, I like working with machine learning more but I am also willing to do back end, hehe now I can improve my application and create other similar ones with speech recognition

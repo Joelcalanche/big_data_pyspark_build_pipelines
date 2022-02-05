@@ -1,0 +1,20 @@
+Fundamentals of BigData and Apache Spark
+
+* Chapter 1: Fundamentals of BigData and introduction to Spark as a distributed computing framework
+
+* Main components: Spark Core and Spark built-in libraries - Spark SQL, Spark MLlib, Graphx, and Spark Streaming
+
+
+* PySpark: Apache Spark's Python API to execute Spark jobs
+
+* PySpark shell: For developing the interactive applications in python
+
+* Spark modes: Local and cluster mode
+
+
+Chapter 2: Introducton to RDDs, different features of RDDs,  methods of creating RDDs and RDD operations (transformations and Actions)
+
+* Chapter 3: Introduction to spark SQL, DataFrame abstraction, creating DataFrames,
+DataFrame operations and visualizing Big Data through DataFrames
+
+* chapter 4: Introduction to Spark MLlib, the three C's of Machine learning( Collaborative, filtering, Classification and CLustering)

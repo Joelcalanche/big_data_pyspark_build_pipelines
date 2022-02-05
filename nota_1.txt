@@ -1,0 +1,5 @@
+
+# desde el directorio que contienee tanto el tap como el target se ejecuta este comando ejemplo
+
+#-------------------------------debemos especificar el path dond se encuentran las configuraciones
+tap-marketing-api | target-csv --config ingest/data_lake.conf

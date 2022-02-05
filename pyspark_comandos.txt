@@ -1,0 +1,207 @@
+pyspark comandos 
+revisar notebook de pyspark
+
+schema = StructType([StructField("store", StringType(), nullable=False)])
+
+
+Para schema definido manual
+prices = spark.read.options(header="True").schema(schema).csv("mnt/data_lake/landing/prices.csv")
+
+
+dentro del .options(mode="DROPMALFORMED")
+
+by default is mode="PERMISSIVE"
+
+
+
+prices.fillna(25, subset=['quantity']).show()
+
+
+
+from pyspark.sql.functions import col, when
+
+from datetim import date, timedelta
+
+
+one_year_from_now = date.today().raplace(year=date.today().year + 1)
+
+
+better_frame = employees.withColumn("end_date", when(col("end_date")> one_year_from_now, None).otherwise(col("end_date")))
+
+
+
+
+
+from pyspark.sql.functions import col, when
+
+# Add/relabel the column
+categorized_ratings = ratings.withColumn(
+    "comfort",
+    # Express the condition in terms of column operations
+    when(col("comfort") > 3, "sufficient").otherwise("insufficient"))
+
+categorized_ratings.show()
+
+
+better_frame.show()
+better_frame.show()
+
+
+Common data transformations
+
+* Filtering rows
+Selecting and renaming columns
+* Groping and aggregation
+
+* Joining multiple datasets
+
+* Ordering data
+
+
+
+Filtering 
+
+prices_in_belgium = prices.filter(col('countrycode') == 'BE').orderBy(col('date'))
+
+
+
+Selecting and renaming columns
+
+prices.select(
+	col("store"),
+	col("brand").alias("brandname")
+).distinct() # para remover duplicados 
+
+
+Groping and aggregating with mean()
+
+
+(prices
+	.groupBy(col('brand'))
+	.mean('price')
+	).show()
+
+
+
+frame
+            .groupBy("country", "province")
+            .agg(sum(col("inhabitants")).alias("inhabitants"))
+            )
+
+
+podemos agrupar anidadamente
+
+	si queremos utilizar dos agregaciones diferentes podemos hacerlo usando .agg
+
+
+	(prices
+		.groupBy(col('brand'))
+		.agg(
+			avg('price').alias('average_price')
+			count('brand').alias('number_of_items'))).show()
+
+
+
+
+from pyspark.sql.functions import col
+
+# Select the columns and rename the "absorption_rate" column
+result = ratings.select([col("brand"),
+                       col("model"),
+                       col("absorption_rate").alias("absorbency")])
+
+# Show only unique values
+result.distinct().show()
+
+
+
+
+from pyspark.sql.functions import col, avg, stddev_samp, max as sfmax
+
+aggregated = (purchased
+              # Group rows by 'Country'
+              .groupBy(col('Country'))
+              .agg(
+                # Calculate the average salary per group and rename
+                avg('Salary').alias('average_salary'),
+                # Calculate the standard deviation per group
+                stddev_samp('Salary'),
+                # Retain the highest salary per group and rename
+                sfmax('Salary').alias('highest_salary')
+              )
+             )
+
+
+
+
+Joining related data
+
+ratings.join(prices, ["brand", "model"])
+
+
+Using the "spark-submit" helper program
+
+installation
+
+1. sets up launch environment for use with the cluster manager and the selected deploy mode
+
+cluster manager:
+
+"These are the availabel resources. who needs something"
+
+
+
+basic arguments of "spark-submit" \ --master "local[*]" \------- on your path, if Spark is installed  URL of the cluster manager
+
+esto le indica a spark donde buscar los recursos
+
+si nuestra pyspark data pipelines relies on more than just one Python module, debemos copiar los modulos en todos los nodos para que cada python interpreter de los cluster sepan donde encontrar las funciones que necesitan ejecutar, tipicamente los modulos se proveen en un zip files
+using --py-files PY-FILES que copia todas las dependencias 
+
+tenemos que indicar cual es el main file entry point to our application
+
+MAIN_PYTHON_FILE\ este el file que contiene el codigo para lanzar la sparkSession
+
+the"--py-files" can take a comma separated list of files that will be added on each workers PYTHONPATH, whichs list the placs where the Python interpreter will look for modules
+
+
+para crear un archivo zip adecuador navegamos hasta el directorio que contiene la carpeta raiz del modules
+
+luego usamos zip \ --recurse-paths \
+dependencies.zip \ ---- este el nombr que le daremos al archivo de salida
+pydiaper - esta es la carpeta que queremos comprimir
+zip \
+--recurse-paths\
+--pydiaper.zip \
+pydiaper
+# dependencias.zip 
+
+
+
+luego spark-submit \
+--py-files dependencies.zip \
+
+
+spark-submit \ 
+--py-files dependencies.zip \ pydiaper/cleaning/clean_prices.py
+
+
+si tenemos varios podemos  especificar
+spark-submit \ 
+--py-files dependencies.zip \ pydiaper/cleaning/clean_prices.py
+
+
+
+
+spark-submit --py-files PY_FILES MAIN_PYTHON_FILE
+
+
+with PY_FILES being either a zipped archive, a Python egg or separate Python files that will be placed on the PYTHONPATH environment variable of your cluster's nodes.
+
+The MAIN_PYTHON_FILE should be the entry point of your application.
+
+In this particular exercise, the path of the zipped archive is spark_pipelines/pydiaper/pydiaper.zip whereas the path to your application entry point is
+
+
+
+spark-submit --py-files spark_pipelines/pydiaper/pydiaper.zip  spark_pipelines/pydiaper/pydiaper/cleaning/clean_ratings.py
